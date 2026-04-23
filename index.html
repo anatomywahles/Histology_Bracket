@@ -1,227 +1,140 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tissue Tournament Bracket</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tissue Tournament Bracket</title>
 
-  <!-- PDF libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-
-  <style>
-    :root {
-      --bg:#f8fafc;
-      --card:#ffffff;
-      --text:#111827;
-      --muted:#374151;
-      --border:rgba(17,24,39,.18);
-      --shadow: 0 10px 30px rgba(17,24,39,.08);
-      --radius:18px;
-      --soft:#eef2ff;
-      --accent:#047857;
-    }
-    body {
-      margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background:var(--bg);
-      color:var(--text);
-    }
-    header {
-      max-width:1100px;
-      margin:auto;
-      padding:24px 18px 10px;
-    }
-    .wrap {
-      max-width:1100px;
-      margin:auto;
-      padding:12px 18px 30px;
-      display:grid;
-      gap:14px;
-    }
-    .card {
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:16px;
-    }
-    button {
-      padding:10px 14px;
-      border-radius:14px;
-      border:1px solid var(--border);
-      font-weight:800;
-      cursor:pointer;
-      background:white;
-    }
-    button.primary { background:rgba(29,78,216,.1); }
-    button.good { background:rgba(4,120,87,.12); }
-    button[disabled] { opacity:.6; cursor:not-allowed; }
-    textarea, input {
-      width:100%;
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid var(--border);
-      font-family:inherit;
-    }
-    textarea { min-height:90px; }
-    .choices {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
-      margin:10px 0;
-    }
-    .choice {
-      border:1px solid var(--border);
-      border-radius:16px;
-      padding:12px;
-      cursor:pointer;
-    }
-    .choice.selected {
-      outline:4px solid rgba(245,158,11,.6);
-    }
-    .hidden { display:none!important; }
-    .toast {
-      position:fixed;
-      bottom:20px;
-      right:20px;
-      background:rgba(4,120,87,.95);
-      color:white;
-      padding:10px 14px;
-      border-radius:12px;
-      font-weight:700;
-      z-index:9999;
-    }
-  </style>
+<style>
+body{font-family:Arial,sans-serif;background:#f8fafc;margin:0}
+.container{max-width:1000px;margin:auto;padding:20px}
+.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.1);margin-bottom:16px}
+button{padding:10px 14px;border-radius:10px;border:1px solid #ccc;font-weight:bold;cursor:pointer}
+button.primary{background:#e0e7ff}
+button.good{background:#dcfce7}
+button:disabled{opacity:.5}
+.choice{border:1px solid #ccc;border-radius:12px;padding:12px;cursor:pointer}
+.choice.selected{outline:3px solid #f59e0b}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hidden{display:none}
+textarea,input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc}
+.toast{position:fixed;bottom:20px;right:20px;background:#047857;color:#fff;padding:10px 14px;border-radius:10px;font-weight:bold}
+</style>
 </head>
 
 <body>
+<div class="container">
 
-<header>
-  <h1>Tissue Tournament Bracket</h1>
-  <p>Select the slightly more important tissue in each matchup and explain your reasoning.</p>
-</header>
+<div class="card" id="start">
+  <h2>Start</h2>
+  <label>Name (required)</label>
+  <input id="studentName">
+  <br><br>
+  <button id="begin" class="primary">Begin Bracket</button>
+</div>
 
-<div class="wrap">
+<div class="card hidden" id="match"></div>
 
-  <!-- Start -->
-  <section class="card" id="startCard">
-    <label>Name (required)</label>
-    <input id="studentName" placeholder="Firstname Lastname">
-    <br><br>
-    <button id="btnBegin" class="primary">Begin Bracket</button>
-  </section>
-
-  <!-- Match -->
-  <section class="card hidden" id="matchCard"></section>
-
-  <!-- Results -->
-  <section class="card hidden" id="resultsCard">
-    <h2>Champion Tissue</h2>
-    <div id="championName" style="font-weight:900;"></div>
-
-    <br>
-    <button id="btnPDFBracket" class="primary">Download Your Bracket</button>
-    <button id="btnPDFExplanations" class="primary">Download Your Explanations</button>
-    <button id="btnPDFBoth" class="primary">Download Your Results (Bracket + Explanations)</button>
-  </section>
+<div class="card hidden" id="results">
+  <h2>Champion Tissue</h2>
+  <p id="champ"></p>
+  <button>Download Your Bracket</button>
+  <button>Download Your Explanations</button>
+  <button>Download Your Results (Bracket + Explanations)</button>
+</div>
 
 </div>
 
 <script>
-const SETTINGS = { minWords: 10 };
-
-const tissues = [
-  "Simple squamous epithelium","Simple cuboidal epithelium",
-  "Simple columnar epithelium","Stratified squamous epithelium",
-  "Areolar connective tissue","Adipose connective tissue",
-  "Dense connective tissue","Bone","Blood","Cartilage",
-  "Skeletal muscle","Cardiac muscle","Smooth muscle",
-  "Nervous tissue","Elastic cartilage","Hyaline cartilage"
+const tissues=[
+"Simple squamous epithelium","Simple cuboidal epithelium",
+"Simple columnar epithelium","Stratified squamous epithelium",
+"Areolar connective tissue","Adipose connective tissue",
+"Dense connective tissue","Bone","Blood","Cartilage",
+"Skeletal muscle","Cardiac muscle","Smooth muscle",
+"Nervous tissue","Elastic cartilage","Hyaline cartilage"
 ];
 
-let state = { picks:[], index:0 };
+let index=0;
+let picks=[];
 
 function toast(msg){
-  const t=document.createElement("div");
-  t.className="toast";
+  const t=document.createElement('div');
+  t.className='toast';
   t.textContent=msg;
   document.body.appendChild(t);
   setTimeout(()=>t.remove(),2000);
 }
 
-function wordCount(t){
+function countWords(t){
   return t.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function renderMatch(){
-  if(state.index >= tissues.length-1){
+  if(index >= tissues.length-1){
     finish();
     return;
   }
 
-  const a=tissues[state.index];
-  const b=tissues[state.index+1];
+  const a=tissues[index];
+  const b=tissues[index+1];
+  const card=document.getElementById('match');
 
-  const card=document.getElementById("matchCard");
   card.innerHTML=`
-    <h3>Decision ${state.picks.length+1}</h3>
+    <h3>Decision ${picks.length+1}</h3>
     <div class="choices">
       <div class="choice" data="A">${a}</div>
       <div class="choice" data="B">${b}</div>
     </div>
     <label>Explanation (minimum 10 words)</label>
-    <textarea id="explain"></textarea>
+    <textarea id="exp"></textarea>
     <p id="wc">Word count: 0 / 10</p>
     <button id="submit" class="good" disabled>Submit Decision & Continue</button>
   `;
 
   let selected=null;
-  const explain=document.getElementById("explain");
-  const submit=document.getElementById("submit");
+  const exp=document.getElementById('exp');
+  const btn=document.getElementById('submit');
 
-  card.querySelectorAll(".choice").forEach(c=>{
+  card.querySelectorAll('.choice').forEach(c=>{
     c.onclick=()=>{
-      card.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));
-      c.classList.add("selected");
+      card.querySelectorAll('.choice').forEach(x=>x.classList.remove('selected'));
+      c.classList.add('selected');
       selected=c.dataset;
       update();
     };
   });
 
-  explain.oninput=update;
+  exp.oninput=update;
 
   function update(){
-    const wc=wordCount(explain.value);
-    document.getElementById("wc").textContent=\`Word count: \${wc} / 10\`;
-    submit.disabled=!(selected && wc>=10);
+    const wc=countWords(exp.value);
+    document.getElementById('wc').textContent=`Word count: ${wc} / 10`;
+    btn.disabled=!(selected && wc>=10);
   }
 
-  submit.onclick=()=>{
-    state.picks.push({winner: selected==="A"?a:b});
+  btn.onclick=()=>{
+    picks.push({winner:selected==="A"?a:b});
     toast("Decision submitted.");
-    state.index+=2;
+    index+=2;
     renderMatch();
   };
 }
 
 function finish(){
-  document.getElementById("matchCard").classList.add("hidden");
-  document.getElementById("resultsCard").classList.remove("hidden");
-  document.getElementById("championName").textContent =
-    state.picks[state.picks.length-1].winner;
+  document.getElementById('match').classList.add('hidden');
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('champ').textContent=picks[picks.length-1].winner;
 }
 
-document.getElementById("btnBegin").onclick=()=>{
-  if(!document.getElementById("studentName").value.trim()){
-    alert("Please enter your name.");
-    return;
-  }
-  document.getElementById("startCard").classList.add("hidden");
-  document.getElementById("matchCard").classList.remove("hidden");
+document.getElementById('begin').onclick=()=>{
+  const name=document.getElementById('studentName').value.trim();
+  if(!name){alert("Please enter your name");return;}
+  document.getElementById('start').classList.add('hidden');
+  const m=document.getElementById('match');
+  m.classList.remove('hidden');
   renderMatch();
 };
 </script>
-
 </body>
 </html>
