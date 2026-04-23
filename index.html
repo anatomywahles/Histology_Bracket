@@ -1,140 +1,234 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Tissue Tournament Bracket</title>
 
+<!-- Export libraries -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 <style>
-body{font-family:Arial,sans-serif;background:#f8fafc;margin:0}
-.container{max-width:1000px;margin:auto;padding:20px}
-.card{background:#fff;padding:20px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.1);margin-bottom:16px}
-button{padding:10px 14px;border-radius:10px;border:1px solid #ccc;font-weight:bold;cursor:pointer}
-button.primary{background:#e0e7ff}
-button.good{background:#dcfce7}
-button:disabled{opacity:.5}
-.choice{border:1px solid #ccc;border-radius:12px;padding:12px;cursor:pointer}
-.choice.selected{outline:3px solid #f59e0b}
-.choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.hidden{display:none}
-textarea,input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc}
-.toast{position:fixed;bottom:20px;right:20px;background:#047857;color:#fff;padding:10px 14px;border-radius:10px;font-weight:bold}
+/* =======================
+   CORE THEME
+======================= */
+:root{
+  --bg:#f8fafc;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#374151;
+  --accent:#1d4ed8;
+  --accent2:#047857;
+  --danger:#b91c1c;
+  --border:rgba(17,24,39,.18);
+  --shadow: 0 10px 30px rgba(17,24,39,.08);
+  --radius:18px;
+  --focus: 0 0 0 3px rgba(29,78,216,.25);
+  --soft:#eef2ff;
+  --selectedFill: rgba(245,158,11,.18);
+  --selectedBorder: rgba(245,158,11,.85);
+}
+
+body{
+  margin:0;
+  font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.hidden{ display:none !important; }
+
+/* =======================
+   WINNER MODAL
+======================= */
+#winnerModal{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+}
+
+#winnerModal .backdrop{
+  position:absolute;
+  inset:0;
+  background: rgba(17,24,39,0.65);
+}
+
+#winnerModal .modal{
+  position:relative;
+  background:#fff;
+  padding:30px 34px;
+  border-radius:22px;
+  max-width:520px;
+  width:calc(100% - 40px);
+  box-shadow:0 30px 80px rgba(0,0,0,.35);
+  text-align:center;
+}
+
+#winnerModal h2{
+  margin:0 0 10px;
+  font-size:2rem;
+  font-weight:900;
+  color:#065f46;
+}
+
+#winnerModal p{
+  margin:0 0 20px;
+  color:#374151;
+}
+
+#winnerModal button{
+  font-size:1.05rem;
+  padding:12px 16px;
+  border-radius:14px;
+  border:1px solid rgba(4,120,87,.45);
+  background:rgba(4,120,87,.15);
+  color:#065f46;
+  font-weight:900;
+  cursor:pointer;
+}
+
+/* =======================
+   CONFETTI
+======================= */
+#confettiCanvas{
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* =======================
+   BUTTONS / UTIL
+======================= */
+button{
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:#fff;
+  padding:10px 12px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+button.good{
+  background:rgba(4,120,87,.12);
+  border-color:rgba(4,120,87,.45);
+  color:#065f46;
+}
 </style>
 </head>
 
 <body>
-<div class="container">
 
-<div class="card" id="start">
-  <h2>Start</h2>
-  <label>Name (required)</label>
-  <input id="studentName">
-  <br><br>
-  <button id="begin" class="primary">Begin Bracket</button>
-</div>
+<!-- CONFETTI CANVAS -->
+<canvas id="confettiCanvas"></canvas>
 
-<div class="card hidden" id="match"></div>
-
-<div class="card hidden" id="results">
-  <h2>Champion Tissue</h2>
-  <p id="champ"></p>
-  <button>Download Your Bracket</button>
-  <button>Download Your Explanations</button>
-  <button>Download Your Results (Bracket + Explanations)</button>
-</div>
-
+<!-- WINNER MODAL -->
+<div id="winnerModal" class="hidden" role="dialog" aria-modal="true">
+  <div class="backdrop"></div>
+  <div class="modal">
+    <h2 id="winnerText">The Winner is…</h2>
+    <p>
+      You’ve completed your Tissue Tournament Bracket.<br>
+      To finish, download your results.
+    </p>
+    <button id="downloadAllBtn" class="good">
+      Download Results (Bracket + Explanations)
+    </button>
+  </div>
 </div>
 
 <script>
-const tissues=[
-"Simple squamous epithelium","Simple cuboidal epithelium",
-"Simple columnar epithelium","Stratified squamous epithelium",
-"Areolar connective tissue","Adipose connective tissue",
-"Dense connective tissue","Bone","Blood","Cartilage",
-"Skeletal muscle","Cardiac muscle","Smooth muscle",
-"Nervous tissue","Elastic cartilage","Hyaline cartilage"
-];
+/* ==========================================================
+   CONFETTI ANIMATION (NO LIBRARIES)
+========================================================== */
+const canvas = document.getElementById("confettiCanvas");
+const ctx = canvas.getContext("2d");
+let confettiPieces = [];
+let confettiActive = false;
 
-let index=0;
-let picks=[];
+function resizeConfetti(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeConfetti);
+resizeConfetti();
 
-function toast(msg){
-  const t=document.createElement('div');
-  t.className='toast';
-  t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(),2000);
+function launchConfetti(){
+  confettiActive = true;
+  confettiPieces = Array.from({length: 180}).map(() => ({
+    x: Math.random()*canvas.width,
+    y: Math.random()*-canvas.height,
+    r: Math.random()*6+4,
+    d: Math.random()*canvas.height,
+    color: `hsl(${Math.random()*360},90%,60%)`,
+    tilt: Math.random()*10,
+    tiltSpeed: Math.random()*0.1+0.05
+  }));
+  requestAnimationFrame(drawConfetti);
+  setTimeout(() => confettiActive = false, 6000);
 }
 
-function countWords(t){
-  return t.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function renderMatch(){
-  if(index >= tissues.length-1){
-    finish();
-    return;
-  }
-
-  const a=tissues[index];
-  const b=tissues[index+1];
-  const card=document.getElementById('match');
-
-  card.innerHTML=`
-    <h3>Decision ${picks.length+1}</h3>
-    <div class="choices">
-      <div class="choice" data="A">${a}</div>
-      <div class="choice" data="B">${b}</div>
-    </div>
-    <label>Explanation (minimum 10 words)</label>
-    <textarea id="exp"></textarea>
-    <p id="wc">Word count: 0 / 10</p>
-    <button id="submit" class="good" disabled>Submit Decision & Continue</button>
-  `;
-
-  let selected=null;
-  const exp=document.getElementById('exp');
-  const btn=document.getElementById('submit');
-
-  card.querySelectorAll('.choice').forEach(c=>{
-    c.onclick=()=>{
-      card.querySelectorAll('.choice').forEach(x=>x.classList.remove('selected'));
-      c.classList.add('selected');
-      selected=c.dataset;
-      update();
-    };
+function drawConfetti(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  confettiPieces.forEach(p=>{
+    ctx.beginPath();
+    ctx.fillStyle=p.color;
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fill();
+    p.y += Math.cos(p.d)*2+5;
+    p.x += Math.sin(p.tilt);
   });
+  if(confettiActive) requestAnimationFrame(drawConfetti);
+}
 
-  exp.oninput=update;
+/* ==========================================================
+   PDF EXPORT (COMBINED ONLY)
+========================================================== */
+async function exportPDF(){
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ format:"letter", unit:"pt" });
 
-  function update(){
-    const wc=countWords(exp.value);
-    document.getElementById('wc').textContent=`Word count: ${wc} / 10`;
-    btn.disabled=!(selected && wc>=10);
+  const bracket = document.getElementById("exportBracketPage");
+  const explanations = document.getElementById("exportExplanationPage");
+
+  async function add(node, newPage){
+    const canvas = await html2canvas(node, {scale:2, backgroundColor:"#fff"});
+    const w = pdf.internal.pageSize.getWidth()-72;
+    const h = pdf.internal.pageSize.getHeight()-72;
+    const ratio = Math.min(w/canvas.width, h/canvas.height);
+    if(newPage) pdf.addPage();
+    pdf.addImage(canvas, "PNG", 36, 36, canvas.width*ratio, canvas.height*ratio);
   }
 
-  btn.onclick=()=>{
-    picks.push({winner:selected==="A"?a:b});
-    toast("Decision submitted.");
-    index+=2;
-    renderMatch();
-  };
+  await add(bracket, false);
+  await add(explanations, true);
+
+  pdf.save("tissue_tournament_bracket_and_explanations.pdf");
 }
 
-function finish(){
-  document.getElementById('match').classList.add('hidden');
-  document.getElementById('results').classList.remove('hidden');
-  document.getElementById('champ').textContent=picks[picks.length-1].winner;
-}
+/* ==========================================================
+   FORCE DOWNLOAD TO CLOSE MODAL
+========================================================== */
+document.getElementById("downloadAllBtn").addEventListener("click", async ()=>{
+  await exportPDF();
+  document.getElementById("winnerModal").classList.add("hidden");
+});
 
-document.getElementById('begin').onclick=()=>{
-  const name=document.getElementById('studentName').value.trim();
-  if(!name){alert("Please enter your name");return;}
-  document.getElementById('start').classList.add('hidden');
-  const m=document.getElementById('match');
-  m.classList.remove('hidden');
-  renderMatch();
-};
+/* ==========================================================
+   DEMO TRIGGER (REPLACE WITH YOUR INTERNAL CALL)
+   This simulates the end-of-bracket event
+========================================================== */
+setTimeout(()=>{
+  // 🎯 This block should be called INSIDE showResults()
+  document.getElementById("winnerText").textContent =
+    "The Winner is… Nervous tissue!";
+  document.getElementById("winnerModal").classList.remove("hidden");
+  launchConfetti();
+},1000);
 </script>
+
 </body>
 </html>
